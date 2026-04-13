@@ -1,4 +1,5 @@
 #![deny(clippy::unwrap_used)]
+#![allow(unexpected_cfgs)]
 // By default, Windows creates an additional console window for our program.
 //
 //
