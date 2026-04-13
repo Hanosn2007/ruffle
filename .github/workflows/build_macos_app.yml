@@ -25,8 +25,8 @@ jobs:
 
       - name: Build desktop binaries
         run: |
-          cargo build --locked --release --package ruffle_desktop --target aarch64-apple-darwin --features sandbox,jpegxr
-          cargo build --locked --release --package ruffle_desktop --target x86_64-apple-darwin --features sandbox,jpegxr
+          cargo build --release --package ruffle_desktop --target aarch64-apple-darwin --features sandbox,jpegxr
+          cargo build --release --package ruffle_desktop --target x86_64-apple-darwin --features sandbox,jpegxr
         env:
           CFG_RELEASE_CHANNEL: nightly
           MACOSX_DEPLOYMENT_TARGET: 11.0
