@@ -11,7 +11,7 @@ use objc::{class, msg_send, sel, sel_impl};
 type Id = *mut Object;
 
 static PENDING_FILES: OnceLock<Mutex<Vec<PathBuf>>> = OnceLock::new();
-static INSTALLED_DELEGATE_CLASS: OnceLock<*const Class> = OnceLock::new();
+static INSTALLED_DELEGATE_CLASS: OnceLock<usize> = OnceLock::new();
 
 fn pending_files() -> &'static Mutex<Vec<PathBuf>> {
     PENDING_FILES.get_or_init(|| Mutex::new(Vec::new()))
@@ -97,7 +97,8 @@ pub fn install_open_file_handler() {
     }
 
     let delegate_class: *const Class = unsafe { msg_send![delegate, class] };
-    if delegate_class.is_null() || INSTALLED_DELEGATE_CLASS.get() == Some(&delegate_class) {
+    let delegate_class_addr = delegate_class as usize;
+    if delegate_class.is_null() || INSTALLED_DELEGATE_CLASS.get() == Some(&delegate_class_addr) {
         return;
     }
 
@@ -121,7 +122,7 @@ pub fn install_open_file_handler() {
             c"v@:@@".as_ptr(),
         );
     }
-    let _ = INSTALLED_DELEGATE_CLASS.set(delegate_class);
+    let _ = INSTALLED_DELEGATE_CLASS.set(delegate_class_addr);
 }
 
 pub fn take_pending_open_files() -> Vec<PathBuf> {
