@@ -81,18 +81,20 @@ fn delegate_class() -> *const Class {
 
     let mut decl = ClassDecl::new("RuffleFileOpenDelegate", class!(NSObject))
         .expect("Failed to declare RuffleFileOpenDelegate");
-    decl.add_method(
-        sel!(application:openFile:),
-        application_open_file as extern "C" fn(&Object, Sel, Id, Id) -> BOOL,
-    );
-    decl.add_method(
-        sel!(application:openFiles:),
-        application_open_files as extern "C" fn(&Object, Sel, Id, Id),
-    );
-    decl.add_method(
-        sel!(application:openURLs:),
-        application_open_urls as extern "C" fn(&Object, Sel, Id, Id),
-    );
+    unsafe {
+        decl.add_method(
+            sel!(application:openFile:),
+            application_open_file as extern "C" fn(&Object, Sel, Id, Id) -> BOOL,
+        );
+        decl.add_method(
+            sel!(application:openFiles:),
+            application_open_files as extern "C" fn(&Object, Sel, Id, Id),
+        );
+        decl.add_method(
+            sel!(application:openURLs:),
+            application_open_urls as extern "C" fn(&Object, Sel, Id, Id),
+        );
+    }
     decl.register()
 }
 
