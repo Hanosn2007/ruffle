@@ -446,6 +446,7 @@ impl App {
     fn collect_pending_open_files(&mut self) {
         #[cfg(target_os = "macos")]
         {
+            crate::macos_open_files::install_open_file_handler();
             self.pending_open_files
                 .extend(crate::macos_open_files::take_pending_open_files());
         }

@@ -1,17 +1,17 @@
-use std::ffi::CStr;
-use std::os::raw::c_char;
-use std::path::PathBuf;
-use std::sync::{Mutex, Once, OnceLock};
+#![allow(unexpected_cfgs)]
 
-use objc::declare::ClassDecl;
+use std::ffi::CStr;
+use std::os::raw::{c_char, c_int};
+use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
+
 use objc::runtime::{BOOL, Class, NO, Object, Sel, YES};
 use objc::{class, msg_send, sel, sel_impl};
 
 type Id = *mut Object;
 
 static PENDING_FILES: OnceLock<Mutex<Vec<PathBuf>>> = OnceLock::new();
-static INSTALL_DELEGATE: Once = Once::new();
-static mut APP_DELEGATE: Id = std::ptr::null_mut();
+static INSTALLED_DELEGATE_CLASS: OnceLock<*const Class> = OnceLock::new();
 
 fn pending_files() -> &'static Mutex<Vec<PathBuf>> {
     PENDING_FILES.get_or_init(|| Mutex::new(Vec::new()))
@@ -74,40 +74,54 @@ extern "C" fn application_open_urls(_: &Object, _: Sel, _: Id, urls: Id) {
     }
 }
 
-fn delegate_class() -> *const Class {
-    if let Some(class) = Class::get("RuffleFileOpenDelegate") {
-        return class;
-    }
-
-    let mut decl = ClassDecl::new("RuffleFileOpenDelegate", class!(NSObject))
-        .expect("Failed to declare RuffleFileOpenDelegate");
-    unsafe {
-        decl.add_method(
-            sel!(application:openFile:),
-            application_open_file as extern "C" fn(&Object, Sel, Id, Id) -> BOOL,
-        );
-        decl.add_method(
-            sel!(application:openFiles:),
-            application_open_files as extern "C" fn(&Object, Sel, Id, Id),
-        );
-        decl.add_method(
-            sel!(application:openURLs:),
-            application_open_urls as extern "C" fn(&Object, Sel, Id, Id),
-        );
-    }
-    decl.register()
+#[link(name = "objc")]
+unsafe extern "C" {
+    fn class_addMethod(
+        cls: *const Class,
+        name: Sel,
+        imp: *const std::ffi::c_void,
+        types: *const c_char,
+    ) -> c_int;
 }
 
 pub fn install_open_file_handler() {
-    INSTALL_DELEGATE.call_once(|| {
-        let class = delegate_class();
-        let delegate: Id = unsafe { msg_send![class, new] };
-        let app: Id = unsafe { msg_send![class!(NSApplication), sharedApplication] };
-        unsafe {
-            let _: () = msg_send![app, setDelegate: delegate];
-            APP_DELEGATE = delegate;
-        }
-    });
+    let app: Id = unsafe { msg_send![class!(NSApplication), sharedApplication] };
+    if app.is_null() {
+        return;
+    }
+
+    let delegate: Id = unsafe { msg_send![app, delegate] };
+    if delegate.is_null() {
+        tracing::warn!("winit delegate not initialized yet; skipping handler install");
+        return;
+    }
+
+    let delegate_class: *const Class = unsafe { msg_send![delegate, class] };
+    if delegate_class.is_null() || INSTALLED_DELEGATE_CLASS.get() == Some(&delegate_class) {
+        return;
+    }
+
+    unsafe {
+        let _ = class_addMethod(
+            delegate_class,
+            sel!(application:openFile:),
+            application_open_file as *const _,
+            c"c@:@@".as_ptr(),
+        );
+        let _ = class_addMethod(
+            delegate_class,
+            sel!(application:openFiles:),
+            application_open_files as *const _,
+            c"v@:@@".as_ptr(),
+        );
+        let _ = class_addMethod(
+            delegate_class,
+            sel!(application:openURLs:),
+            application_open_urls as *const _,
+            c"v@:@@".as_ptr(),
+        );
+    }
+    let _ = INSTALLED_DELEGATE_CLASS.set(delegate_class);
 }
 
 pub fn take_pending_open_files() -> Vec<PathBuf> {
